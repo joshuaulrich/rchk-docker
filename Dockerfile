@@ -45,4 +45,3 @@ RUN mkdir /opt/R-svn/ \
 #  && export RCHK=/var/scratch/tomas/opt/rchk
 
 CMD ["bash"]
-0
