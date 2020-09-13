@@ -1,8 +1,13 @@
 ## Emacs, make this -*- mode: sh; -*-
- 
-FROM r-base:latest
+
+FROM ubuntu
 
 MAINTAINER "Joshua Ulrich" josh.m.ulrich@gmail.com
+
+## install tzdata to avoid stalling image build
+ARG DEBIAN_FRONTEND="noninteractive"
+ENV TZ=America/Chicago
+RUN apt-get update && apt-get -y install apt-utils tzdata
 
 ## Enable apt sources and get packages
 RUN sed 's/^deb /deb-src /g' /etc/apt/sources.list > /etc/apt/sources.list.d/debian-src.list \
@@ -14,45 +19,32 @@ RUN sed 's/^deb /deb-src /g' /etc/apt/sources.list > /etc/apt/sources.list.d/deb
     subversion \
     rsync \
 # rchk
+    unzip \
     libcurl4-openssl-dev \
-    clang-3.8 \
-    llvm-3.8-dev \
-    clang\+\+-3.8 \
     clang \
-    llvm-dev \
+    clang-8 \
+    clang++-8 \
+    llvm \
+    llvm-8 \
+    llvm-8-dev \
+    libllvm8 \
     libc++-dev \
     libc++abi-dev \
-    python-pip \
+    python3-pip \
+    qpdf \
+    aspell \
+    aspell-en \
+    libpcre2-dev \
 # /rchk
   && rm -rf /var/lib/apt/lists/*
 
-## Fix a bug in C++ string header file (libc++-dev)
-## (see https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=808086)
-RUN if md5sum /usr/include/c++/v1/string | grep -q bc206c6dee334d9d8d1cdcf32df6a92b; \
-  then cp -p /usr/include/c++/v1/string /root/string.orig \
-       && cd /usr/include/c++/v1/ \
-       && echo $'\n\
---- orig/string 2017-03-29 03:44:51.270843442 -0400\n\
-+++ hack/string 2017-03-29 03:45:23.678749561 -0400\n\
-@@ -1936,6 +1936,11 @@\n\
- template <class _CharT, class _Traits, class _Allocator>\n\
- inline _LIBCPP_INLINE_VISIBILITY\n\
- basic_string<_CharT, _Traits, _Allocator>::basic_string(const allocator_type& __a)\n\
-+#if _LIBCPP_STD_VER <= 14\n\
-+    _NOEXCEPT_(is_nothrow_copy_constructible<allocator_type>::value)\n\
-+#else\n\
-+    _NOEXCEPT\n\
-+#endif\n\
-     : __r_(__a)\n\
- {\n #if _LIBCPP_DEBUG_LEVEL >= 2' | patch -p1; fi
+## Install latest WLLVM scripts with pip
+RUN pip3 install --upgrade pip \
+  && pip3 install wllvm
 
-## Install latest WLLVM scripts from GitHub
-RUN pip install --upgrade pip \
-  && pip install setuptools wheel --upgrade \
-  && wget https://github.com/travitch/whole-program-llvm/archive/master.zip -O /opt/master.zip \
-  && unzip /opt/master.zip -d /opt/ \
-  && mv /opt/whole-program-llvm-master /opt/whole-program-llvm \
-  && pip install wllvm --user
+ENV WLLVM=/usr/local/bin
+ENV LLVM=/usr/lib/llvm-8
+ENV RCHK=/opt/rchk
 
 ## Install rchk
 RUN wget https://github.com/kalibera/rchk/archive/master.zip -O /opt/master.zip \
@@ -61,13 +53,11 @@ RUN wget https://github.com/kalibera/rchk/archive/master.zip -O /opt/master.zip 
   && cd /opt/rchk/src \
   && make
 
-ENV WLLVM=/root/.local/bin
-ENV LLVM=/usr/
-ENV RCHK=/opt/rchk/
-
-## Get R sources and configure rchk
-RUN mkdir /opt/R-svn/ \
-  && svn checkout https://svn.r-project.org/R/trunk /opt/R-svn \
+## Get R-devel source, then configure rchk and build
+RUN cd /opt \
+  && wget https://stat.ethz.ch/R/daily/R-devel.tar.gz \
+  && tar -xf R-devel.tar.gz \
+  && mv R-devel R-svn \
   && cd /opt/R-svn/ \
   && /opt/rchk/scripts/build_r.sh
 
